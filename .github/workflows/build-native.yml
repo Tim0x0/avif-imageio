@@ -1,0 +1,260 @@
+name: Build Native Libraries
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'src/main/c/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-native.yml'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+        
+      - name: Setup NASM
+        uses: ilammy/setup-nasm@v1
+        
+      - name: Install meson
+        run: pip install meson
+          
+      - name: Build libavif with local dav1d, aom and libyuv
+        run: |
+          git clone --depth 1 --branch v1.3.0 https://github.com/AOMediaCodec/libavif.git
+          cd libavif/ext
+          .\dav1d.cmd
+          .\libyuv.cmd
+          # Build aom with encoder only (decoder disabled for smaller size)
+          git clone -b v3.12.1 --depth 1 https://aomedia.googlesource.com/aom
+          cmake -G Ninja -S aom -B aom/build.libavif `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DCONFIG_PIC=1 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DENABLE_DOCS=0 `
+            -DENABLE_EXAMPLES=0 `
+            -DENABLE_TESTDATA=0 `
+            -DENABLE_TESTS=0 `
+            -DENABLE_TOOLS=0 `
+            -DCONFIG_AV1_DECODER=0
+          cmake --build aom/build.libavif --config Release --parallel
+          cd ..
+          cmake -G Ninja -B build -S . `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DAVIF_CODEC_DAV1D=LOCAL `
+            -DAVIF_CODEC_AOM=LOCAL `
+            -DAVIF_CODEC_AOM_DECODE=OFF `
+            -DAVIF_LIBYUV=LOCAL
+          cmake --build build --config Release
+          cmake --install build --prefix ${{ github.workspace }}/libavif-install
+          
+      - name: Configure CMake
+        run: |
+          cmake -G Ninja -B build -S . -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/libavif-install" `
+            -DBUILD_STATIC=ON
+          
+      - name: Build
+        run: cmake --build build --config Release
+        
+      - name: Copy artifact
+        run: |
+          mkdir -p artifacts/win/64
+          cp build/Release/avif-imageio.dll artifacts/win/64/ 2>/dev/null || cp build/avif-imageio.dll artifacts/win/64/
+        shell: bash
+        
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-win-64
+          path: artifacts/win/64/avif-imageio.dll
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential nasm meson ninja-build
+          
+      - name: Build libavif with local dav1d, aom and libyuv
+        run: |
+          git clone --depth 1 --branch v1.3.0 https://github.com/AOMediaCodec/libavif.git
+          cd libavif/ext
+          ./dav1d.cmd
+          ./libyuv.cmd
+          # Build aom with encoder only (decoder disabled for smaller size)
+          git clone -b v3.12.1 --depth 1 https://aomedia.googlesource.com/aom
+          cmake -G Ninja -S aom -B aom/build.libavif \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCONFIG_PIC=1 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_DOCS=0 \
+            -DENABLE_EXAMPLES=0 \
+            -DENABLE_TESTDATA=0 \
+            -DENABLE_TESTS=0 \
+            -DENABLE_TOOLS=0 \
+            -DCONFIG_AV1_DECODER=0
+          cmake --build aom/build.libavif --config Release --parallel
+          cd ..
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DAVIF_CODEC_DAV1D=LOCAL \
+            -DAVIF_CODEC_AOM=LOCAL \
+            -DAVIF_CODEC_AOM_DECODE=OFF \
+            -DAVIF_LIBYUV=LOCAL
+          cmake --build build -j$(nproc)
+          sudo cmake --install build
+          
+      - name: Configure CMake
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
+        
+      - name: Build
+        run: cmake --build build --config Release
+        
+      - name: Copy artifact
+        run: |
+          mkdir -p artifacts/linux/64
+          strip --strip-unneeded build/libavif-imageio.so
+          cp build/libavif-imageio.so artifacts/linux/64/
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-64
+          path: artifacts/linux/64/libavif-imageio.so
+
+  build-macos-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install build dependencies
+        run: |
+          brew install cmake meson ninja nasm
+          
+      - name: Build libavif with local dav1d, aom and libyuv
+        run: |
+          git clone --depth 1 --branch v1.3.0 https://github.com/AOMediaCodec/libavif.git
+          cd libavif/ext
+          ./dav1d.cmd
+          ./libyuv.cmd
+          # Build aom with encoder only (decoder disabled for smaller size)
+          git clone -b v3.12.1 --depth 1 https://aomedia.googlesource.com/aom
+          cmake -G Ninja -S aom -B aom/build.libavif \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCONFIG_PIC=1 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_DOCS=0 \
+            -DENABLE_EXAMPLES=0 \
+            -DENABLE_TESTDATA=0 \
+            -DENABLE_TESTS=0 \
+            -DENABLE_TOOLS=0 \
+            -DCONFIG_AV1_DECODER=0
+          cmake --build aom/build.libavif --config Release --parallel
+          cd ..
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DAVIF_CODEC_DAV1D=LOCAL \
+            -DAVIF_CODEC_AOM=LOCAL \
+            -DAVIF_CODEC_AOM_DECODE=OFF \
+            -DAVIF_LIBYUV=LOCAL \
+            -DCMAKE_OSX_ARCHITECTURES=arm64
+          cmake --build build -j$(sysctl -n hw.ncpu)
+          sudo cmake --install build
+          
+      - name: Configure CMake
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_STATIC=ON
+        
+      - name: Build
+        run: cmake --build build --config Release
+        
+      - name: Copy artifact
+        run: |
+          mkdir -p artifacts/mac/arm64
+          strip -x build/libavif-imageio.dylib
+          cp build/libavif-imageio.dylib artifacts/mac/arm64/
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-mac-arm64
+          path: artifacts/mac/arm64/libavif-imageio.dylib
+
+
+  package-and-test:
+    needs: [build-windows, build-linux, build-macos-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-libs
+          
+      - name: Organize native libraries
+        run: |
+          mkdir -p src/main/resources/native/win/64
+          mkdir -p src/main/resources/native/linux/64
+          mkdir -p src/main/resources/native/mac/arm64
+          
+          cp native-libs/native-win-64/avif-imageio.dll src/main/resources/native/win/64/
+          cp native-libs/native-linux-64/libavif-imageio.so src/main/resources/native/linux/64/
+          cp native-libs/native-mac-arm64/libavif-imageio.dylib src/main/resources/native/mac/arm64/
+          
+      - name: Upload combined artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libraries-all
+          path: src/main/resources/native/
+          
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+          
+      - name: Set version from tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+          else
+            echo "VERSION=0.0.0-SNAPSHOT" >> $GITHUB_ENV
+          fi
+          
+      - name: Build with Gradle
+        run: ./gradlew build
+        
+      - name: Run tests
+        run: ./gradlew test
+          
+      - name: Build JAR
+        run: ./gradlew jar
+          
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: avif-imageio-jar
+          path: build/libs/*.jar

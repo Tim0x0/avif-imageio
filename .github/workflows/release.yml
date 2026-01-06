@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  build-native:
+    uses: ./.github/workflows/build-native.yml
+
+  release:
+    needs: [build-native]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: avif-imageio-jar
+          path: dist/
+          
+      - name: Download native libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: native-libraries-all
+          path: dist/native/
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.jar
+            dist/native/**/*
+          generate_release_notes: true

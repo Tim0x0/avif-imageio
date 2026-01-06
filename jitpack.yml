@@ -1,0 +1,28 @@
+# JitPack 构建配置
+# 从 GitHub Release 下载预编译的 native 库
+
+jdk:
+  - openjdk8
+
+# 构建前从 GitHub Release 下载 native 库
+before_install:
+  - |
+    echo "Downloading native libraries from GitHub Release..."
+    if [[ "${VERSION}" == v* ]]; then
+      TAG="${VERSION}"
+    else
+      TAG="v${VERSION}"
+    fi
+    echo "Using tag: ${TAG}"
+    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/avif-imageio.dll" -o src/main/resources/native/win/64/avif-imageio.dll
+    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/libavif-imageio.so" -o src/main/resources/native/linux/64/libavif-imageio.so
+    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/libavif-imageio.dylib" -o src/main/resources/native/mac/arm64/libavif-imageio.dylib
+    ls -laR src/main/resources/native/
+
+# 自定义安装命令
+install:
+  - ./gradlew publishToMavenLocal -x test -x signMavenJavaPublication
+
+# 构建环境变量
+env:
+  JAVA_OPTS: "-Xmx512m"

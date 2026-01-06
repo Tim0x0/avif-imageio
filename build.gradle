@@ -1,0 +1,109 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+}
+
+group = 'com.github.avifimageio'
+def rawVersion = System.getenv('VERSION') ?: project.findProperty('version') ?: '0.0.0-SNAPSHOT'
+version = rawVersion.startsWith('v') ? rawVersion.substring(1) : rawVersion
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+    withJavadocJar()
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.0'
+    testImplementation 'net.jqwik:jqwik:1.7.0'
+    testImplementation 'org.assertj:assertj-core:3.24.0'
+}
+
+test {
+    useJUnitPlatform {
+        includeEngines 'junit-jupiter', 'jqwik'
+    }
+}
+
+// 将原生库资源包含在 JAR 中
+sourceSets {
+    main {
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+}
+
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'avif-imageio',
+            'Implementation-Version': version,
+            'Implementation-Vendor': 'avif-imageio'
+        )
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            
+            pom {
+                name = 'avif-imageio'
+                description = 'Java ImageIO plugin for AVIF image format'
+                url = 'https://github.com/Tim0x0/avif-imageio'
+                
+                licenses {
+                    license {
+                        name = 'GNU General Public License v3.0'
+                        url = 'https://www.gnu.org/licenses/gpl-3.0.txt'
+                    }
+                }
+                
+                developers {
+                    developer {
+                        id = 'Tim0x0'
+                        name = 'Tim0x0'
+                    }
+                }
+                
+                scm {
+                    connection = 'scm:git:git://github.com/Tim0x0/avif-imageio.git'
+                    developerConnection = 'scm:git:ssh://github.com/Tim0x0/avif-imageio.git'
+                    url = 'https://github.com/Tim0x0/avif-imageio'
+                }
+            }
+        }
+    }
+    
+    repositories {
+        maven {
+            name = 'OSSRH'
+            url = uri('https://oss.sonatype.org/service/local/staging/deploy/maven2/')
+            credentials {
+                username = findProperty('ossrhUsername') ?: ''
+                password = findProperty('ossrhPassword') ?: ''
+            }
+        }
+    }
+}
+
+// 仅在非 JitPack 环境且有签名配置时启用签名
+signing {
+    required { !System.getenv('JITPACK') && gradle.taskGraph.hasTask('publish') }
+    sign publishing.publications.mavenJava
+}
+
+tasks.withType(Javadoc) {
+    options.encoding = 'UTF-8'
+    if (JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
+}
