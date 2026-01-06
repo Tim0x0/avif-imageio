@@ -1,0 +1,52 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# Native build
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.dll
+*.so
+*.dylib
+*.o
+*.obj
+
+# Test outputs
+test-output/
+hs_err_pid*
+
+# Local configuration
+local.properties
+gradle.properties
+!gradle/wrapper/gradle-wrapper.properties
+
+
+# Kiro
+.kiro/
