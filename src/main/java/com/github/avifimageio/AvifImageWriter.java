@@ -78,10 +78,26 @@ public class AvifImageWriter extends ImageWriter {
             
             byte[] encoded;
             boolean hasAlpha = bufferedImage.getColorModel().hasAlpha();
-            
+
             if (hasAlpha) {
-                byte[] rgba = extractRGBA(bufferedImage);
-                encoded = Avif.encodeRGBA(rgba, width, height, width * 4, options);
+                int[] pixels = bufferedImage.getRGB(0, 0, width, height, null, 0, width);
+
+                // 检测 alpha 是否全为 255（完全不透明），跳过冗余的 alpha 通道编码
+                boolean opaqueAlpha = true;
+                for (int i = 0; i < pixels.length; i++) {
+                    if ((pixels[i] >>> 24) != 0xFF) {
+                        opaqueAlpha = false;
+                        break;
+                    }
+                }
+
+                if (opaqueAlpha) {
+                    byte[] rgb = packRGB(pixels);
+                    encoded = Avif.encodeRGB(rgb, width, height, width * 3, options);
+                } else {
+                    byte[] rgba = packRGBA(pixels);
+                    encoded = Avif.encodeRGBA(rgba, width, height, width * 4, options);
+                }
             } else {
                 byte[] rgb = extractRGB(bufferedImage);
                 encoded = Avif.encodeRGB(rgb, width, height, width * 3, options);
@@ -92,17 +108,20 @@ public class AvifImageWriter extends ImageWriter {
     }
     
     /**
-     * 提取 RGB 数据
-     * 
+     * 从 BufferedImage 提取 RGB 字节数组
+     *
      * <p>使用 getRGB() 保证统一的 ARGB 格式，避免不同 BufferedImage 类型的像素顺序问题。</p>
      */
     private byte[] extractRGB(BufferedImage image) {
-        int width = image.getWidth();
-        int height = image.getHeight();
-        byte[] rgb = new byte[width * height * 3];
-        
-        // 使用 getRGB 保证统一的 ARGB 格式，避免 TYPE_INT_RGB 和 TYPE_3BYTE_BGR 等类型的差异
-        int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
+        int[] pixels = image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth());
+        return packRGB(pixels);
+    }
+
+    /**
+     * 将 ARGB int 数组打包为 RGB 字节数组
+     */
+    private byte[] packRGB(int[] pixels) {
+        byte[] rgb = new byte[pixels.length * 3];
         for (int i = 0; i < pixels.length; i++) {
             rgb[i * 3]     = (byte) ((pixels[i] >> 16) & 0xFF); // R
             rgb[i * 3 + 1] = (byte) ((pixels[i] >> 8) & 0xFF);  // G
@@ -110,18 +129,12 @@ public class AvifImageWriter extends ImageWriter {
         }
         return rgb;
     }
-    
+
     /**
-     * 提取 RGBA 数据
-     * 
-     * <p>使用 getRGB() 保证统一的 ARGB 格式。</p>
+     * 将 ARGB int 数组打包为 RGBA 字节数组
      */
-    private byte[] extractRGBA(BufferedImage image) {
-        int width = image.getWidth();
-        int height = image.getHeight();
-        byte[] rgba = new byte[width * height * 4];
-        
-        int[] pixels = image.getRGB(0, 0, width, height, null, 0, width);
+    private byte[] packRGBA(int[] pixels) {
+        byte[] rgba = new byte[pixels.length * 4];
         for (int i = 0; i < pixels.length; i++) {
             rgba[i * 4]     = (byte) ((pixels[i] >> 16) & 0xFF); // R
             rgba[i * 4 + 1] = (byte) ((pixels[i] >> 8) & 0xFF);  // G
