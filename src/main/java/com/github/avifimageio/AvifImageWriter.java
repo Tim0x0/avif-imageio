@@ -18,8 +18,9 @@ import java.io.IOException;
  * <p>实现 ImageIO ImageWriter 接口，支持将图片编码为 AVIF 格式。</p>
  */
 public class AvifImageWriter extends ImageWriter {
-    
+
     private ImageOutputStream output;
+    private boolean written = false;
     
     /**
      * 创建 AVIF 图片写入器
@@ -38,19 +39,39 @@ public class AvifImageWriter extends ImageWriter {
         } else {
             this.output = null;
         }
+        this.written = false;
     }
     
     @Override
-    public void write(IIOMetadata streamMetadata, IIOImage image, ImageWriteParam param) 
+    public void write(IIOMetadata streamMetadata, IIOImage image, ImageWriteParam param)
             throws IOException {
-        
+
         if (output == null) {
             throw new IllegalStateException("Output not set");
         }
-        
+        if (written) {
+            throw new IllegalStateException("Only one image can be written per writer instance");
+        }
+
+        // 检查不支持的参数
+        if (param != null) {
+            if (param.getSourceRegion() != null) {
+                throw new IOException("sourceRegion is not supported, please crop the image before writing");
+            }
+            if (param.getSourceXSubsampling() != 1 || param.getSourceYSubsampling() != 1) {
+                throw new IOException("sourceSubsampling is not supported, please scale the image before writing");
+            }
+            if (param.getSourceBands() != null) {
+                throw new IOException("sourceBands is not supported");
+            }
+        }
+
+        clearAbortRequest();
+        processImageStarted(0);
+
         RenderedImage renderedImage = image.getRenderedImage();
         BufferedImage bufferedImage = toBufferedImage(renderedImage);
-        
+
         int width = bufferedImage.getWidth();
         int height = bufferedImage.getHeight();
         
@@ -76,6 +97,11 @@ public class AvifImageWriter extends ImageWriter {
             options.setBitDepth(bitDepth);
             options.setLossless(lossless);
             
+            if (abortRequested()) {
+                processWriteAborted();
+                return;
+            }
+
             byte[] encoded;
             boolean hasAlpha = bufferedImage.getColorModel().hasAlpha();
 
@@ -104,6 +130,13 @@ public class AvifImageWriter extends ImageWriter {
             }
             
             output.write(encoded);
+            written = true;
+
+            if (abortRequested()) {
+                processWriteAborted();
+            } else {
+                processImageComplete();
+            }
         }
     }
     

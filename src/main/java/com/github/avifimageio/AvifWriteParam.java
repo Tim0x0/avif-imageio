@@ -9,15 +9,14 @@ import java.util.Locale;
  * <p>扩展 ImageWriteParam 以支持 AVIF 特定的编码参数。</p>
  */
 public class AvifWriteParam extends ImageWriteParam {
-    
-    private int quality = AvifEncoderOptions.DEFAULT_QUALITY;
+
     private int speed = AvifEncoderOptions.DEFAULT_SPEED;
     private int bitDepth = AvifEncoderOptions.DEFAULT_BIT_DEPTH;
     private boolean lossless = false;
-    
+
     /**
      * 创建 AVIF 写入参数
-     * 
+     *
      * @param locale 区域设置
      */
     public AvifWriteParam(Locale locale) {
@@ -25,16 +24,18 @@ public class AvifWriteParam extends ImageWriteParam {
         canWriteCompressed = true;
         compressionTypes = new String[]{"AVIF"};
         compressionType = "AVIF";
+        compressionMode = MODE_EXPLICIT;
+        compressionQuality = AvifEncoderOptions.DEFAULT_QUALITY / 100.0f;
     }
-    
+
     /**
      * 获取质量值
      * @return 质量值 (0-100)
      */
-    public int getQuality() { 
-        return quality; 
+    public int getQuality() {
+        return Math.round(compressionQuality * 100);
     }
-    
+
     /**
      * 设置质量值
      * @param quality 质量值 (0-100)
@@ -44,7 +45,7 @@ public class AvifWriteParam extends ImageWriteParam {
         if (quality < 0 || quality > 100) {
             throw new IllegalArgumentException("Quality must be between 0 and 100, got: " + quality);
         }
-        this.quality = quality;
+        compressionQuality = quality / 100.0f;
     }
     
     /**
