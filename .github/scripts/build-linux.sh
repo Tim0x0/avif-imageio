@@ -12,7 +12,12 @@ set +u
 source "${DTS}/enable"
 set -u
 
-# 2) meson / ninja（镜像自带 Python 3 + pip；用 python3 -m pip 最稳，不依赖 pip3 是否在 PATH）
+# 2) meson / ninja
+# manylinux 镜像不提供全局 python3/pip3 命令，CPython 在 /opt/python/cp3X-cp3X/bin/ 下；
+# 动态选取最新的 cp3X 加入 PATH，之后 python3/pip/meson/ninja 均可调用
+PYROOT=$(ls -d /opt/python/cp3* 2>/dev/null | sort -V | tail -1)
+[ -n "$PYROOT" ] || { echo "ERROR: 未在 /opt/python 下找到 CPython"; exit 1; }
+export PATH="${PYROOT}/bin:${PATH}"
 python3 -m pip install meson ninja
 
 # 3) nasm：镜像未预装足够新版本，从源码编译 2.15.05
