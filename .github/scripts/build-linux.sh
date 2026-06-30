@@ -28,7 +28,13 @@ curl -fsSL "https://www.nasm.us/pub/nasm/releasebuilds/${NASM_VERSION}/nasm-${NA
 tar -C /tmp -xf /tmp/nasm.tar.xz
 ( cd "/tmp/nasm-${NASM_VERSION}" && ./configure --prefix=/usr/local && make -j"$(nproc)" install )
 
-# 4) 打印工具链版本（任一缺失会在 set -e 下失败，便于排查）
+# 4) JDK（提供 JNI 头文件给 find_package(JNI)）
+#    manylinux2014 容器内 yum 安装 openjdk 8（参考 sherpa-onnx 的 linux-jni.yaml）；
+#    动态定位 JAVA_HOME，不写死版本号路径
+yum install -y java-1.8.0-openjdk-devel
+export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(which javac)")")")"
+
+# 5) 打印工具链版本（任一缺失会在 set -e 下失败，便于排查）
 echo "=== toolchain versions ==="
 gcc --version | head -1
 g++ --version | head -1
@@ -36,6 +42,8 @@ cmake --version | head -1
 ninja --version
 meson --version
 nasm -v
+java -version 2>&1 | head -1
+echo "JAVA_HOME=${JAVA_HOME}"
 
 SRC=/work            # 挂载进来的仓库源码（host 的 GITHUB_WORKSPACE）
 BW=/tmp/bw           # 容器内构建工作区（构建垃圾随容器销毁）
