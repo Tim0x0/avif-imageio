@@ -6,11 +6,14 @@ set -euo pipefail
 
 # 1) 启用镜像自带的最新 devtoolset（现代 gcc/g++），不写死版本号以兼容镜像更新
 DTS=$(ls -d /opt/rh/devtoolset-* | sort -V | tail -1)
+# devtoolset 的 enable 脚本引用了未定义的 MANPATH，与 set -u 冲突，source 时临时放宽
+set +u
 # shellcheck source=/dev/null
 source "${DTS}/enable"
+set -u
 
-# 2) meson / ninja（镜像自带 Python 3 + pip）
-pip3 install meson ninja
+# 2) meson / ninja（镜像自带 Python 3 + pip；用 python3 -m pip 最稳，不依赖 pip3 是否在 PATH）
+python3 -m pip install meson ninja
 
 # 3) nasm：镜像未预装足够新版本，从源码编译 2.15.05
 #    (dav1d/aom 汇编所需；2.15.05 是最普及版本，官方源 URL 最稳定)
