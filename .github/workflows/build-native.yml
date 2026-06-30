@@ -84,92 +84,21 @@ jobs:
           path: artifacts/win/64/avif-imageio.dll
 
   build-linux:
-    # 在 manylinux2014 (CentOS 7 / glibc 2.17) 容器内编译，
+    # 在 ubuntu host 上用 docker 跑 manylinux2014 (CentOS 7 / glibc 2.17) 容器编译，
     # 保证产出的 .so 能在 CentOS 7 及以后所有主流 Linux 上加载。
-    # 若用 ubuntu-latest，链入的高版本 glibc 符号会导致旧系统(如 CentOS 7)加载失败。
+    # 注意：不能用 container: 模式 —— GitHub 的 JS actions (checkout / upload-artifact 等)
+    # 依赖 runner 注入的 Node 运行时，而 Node 要求 glibc >= 2.28，在 glibc 2.17 的
+    # manylinux2014 容器里根本启动不了。故改为 host 跑 actions + docker run 跑编译。
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup toolchain (devtoolset + meson/ninja/nasm)
+      - name: Build in manylinux2014 container
         run: |
-          # 1) 动态启用镜像自带的最新 devtoolset(不写死版本号，兼容镜像更新)
-          #    写入 /etc/profile.d 供后续每个 step 显式 source
-          DTS=$(ls -d /opt/rh/devtoolset-* | sort -V | tail -1)
-          echo "source ${DTS}/enable" > /etc/profile.d/devtoolset.sh
-          source /etc/profile.d/devtoolset.sh
-
-          # 2) meson / ninja 通过 pip 安装(镜像自带 Python 3)
-          pip3 install meson ninja
-
-          # 3) nasm: 镜像未预装足够新版本，从源码编译 2.15.05
-          #    (dav1d/aom 汇编所需；2.15.05 是最普及版本，官方源 URL 最稳定)
-          NASM_VERSION=2.15.05
-          curl -fsSL "https://www.nasm.us/pub/nasm/releasebuilds/${NASM_VERSION}/nasm-${NASM_VERSION}.tar.xz" -o /tmp/nasm.tar.xz
-          [ -s /tmp/nasm.tar.xz ] || { echo "ERROR: nasm 下载失败，请检查 URL/网络"; exit 1; }
-          tar -C /tmp -xf /tmp/nasm.tar.xz
-          (cd "/tmp/nasm-${NASM_VERSION}" && ./configure --prefix=/usr/local && make -j"$(nproc)" install)
-
-          # 4) 打印工具链版本，便于排查(任一工具缺失会在 set -e 下失败)
-          echo "=== toolchain versions ==="
-          gcc --version | head -1
-          g++ --version | head -1
-          cmake --version | head -1
-          ninja --version
-          meson --version
-          nasm -v
-
-      - name: Build libavif with local dav1d, aom and libyuv
-        run: |
-          source /etc/profile.d/devtoolset.sh
-          git clone --depth 1 --branch v1.3.0 https://github.com/AOMediaCodec/libavif.git
-          cd libavif/ext
-          ./dav1d.cmd
-          ./libyuv.cmd
-          # Build aom with encoder only (decoder disabled for smaller size)
-          git clone -b v3.12.1 --depth 1 https://aomedia.googlesource.com/aom
-          cmake -G Ninja -S aom -B aom/build.libavif \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DCONFIG_PIC=1 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DENABLE_DOCS=0 \
-            -DENABLE_EXAMPLES=0 \
-            -DENABLE_TESTDATA=0 \
-            -DENABLE_TESTS=0 \
-            -DENABLE_TOOLS=0 \
-            -DCONFIG_AV1_DECODER=0
-          cmake --build aom/build.libavif --config Release --parallel
-          cd ..
-          cmake -B build -S . \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DAVIF_CODEC_DAV1D=LOCAL \
-            -DAVIF_CODEC_AOM=LOCAL \
-            -DAVIF_CODEC_AOM_DECODE=OFF \
-            -DAVIF_LIBYUV=LOCAL
-          cmake --build build -j$(nproc)
-          cmake --install build
-
-      - name: Configure CMake
-        run: |
-          source /etc/profile.d/devtoolset.sh
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
-
-      - name: Build
-        run: |
-          source /etc/profile.d/devtoolset.sh
-          cmake --build build --config Release
-
-      - name: Verify glibc compatibility & copy artifact
-        run: |
-          source /etc/profile.d/devtoolset.sh
-          # 确认产物只依赖 glibc <= 2.17 的符号(manylinux2014 基线)，证明兼容性修复生效
-          echo "=== required glibc versions (max should be <= 2.17) ==="
-          objdump -T build/libavif-imageio.so | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -5 || true
-          mkdir -p artifacts/linux/64
-          strip --strip-unneeded build/libavif-imageio.so
-          cp build/libavif-imageio.so artifacts/linux/64/
+          docker run --rm \
+            -v "$PWD:/work" \
+            quay.io/pypa/manylinux2014_x86_64 \
+            bash /work/.github/scripts/build-linux.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
