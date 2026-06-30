@@ -4,9 +4,6 @@
 # 产出的 .so 只依赖 glibc <= 2.17 的符号，可在 CentOS 7 及以后所有主流 Linux 上加载。
 set -euo pipefail
 
-# docker 容器默认 IPv6 不可达；让 getaddrinfo 优先 IPv4，避免 curl/git/pip 踩 IPv6 黑洞
-echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf 2>/dev/null || true
-
 # 1) 启用镜像自带的最新 devtoolset（现代 gcc/g++），不写死版本号以兼容镜像更新
 DTS=$(ls -d /opt/rh/devtoolset-* | sort -V | tail -1)
 # devtoolset 的 enable 脚本引用了未定义的 MANPATH，与 set -u 冲突，source 时临时放宽
@@ -26,7 +23,8 @@ python3 -m pip install meson ninja
 # 3) nasm：镜像未预装足够新版本，从源码编译 2.15.05
 #    (dav1d/aom 汇编所需；2.15.05 是最普及版本，官方源 URL 最稳定)
 NASM_VERSION=2.15.05
-curl -fsSL "https://www.nasm.us/pub/nasm/releasebuilds/${NASM_VERSION}/nasm-${NASM_VERSION}.tar.xz" -o /tmp/nasm.tar.xz
+# -4 强制 IPv4：manylinux2014 的 curl 7.29 无 Happy Eyeballs，IPv6 不可达时不回退会 exit 7
+curl -4fsSL "https://www.nasm.us/pub/nasm/releasebuilds/${NASM_VERSION}/nasm-${NASM_VERSION}.tar.xz" -o /tmp/nasm.tar.xz
 [ -s /tmp/nasm.tar.xz ] || { echo "ERROR: nasm 下载失败，请检查 URL/网络"; exit 1; }
 tar -C /tmp -xf /tmp/nasm.tar.xz
 ( cd "/tmp/nasm-${NASM_VERSION}" && ./configure --prefix=/usr/local && make -j"$(nproc)" install )
