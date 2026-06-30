@@ -4,6 +4,9 @@
 # 产出的 .so 只依赖 glibc <= 2.17 的符号，可在 CentOS 7 及以后所有主流 Linux 上加载。
 set -euo pipefail
 
+# docker 容器默认 IPv6 不可达；让 getaddrinfo 优先 IPv4，避免 curl/git/pip 踩 IPv6 黑洞
+echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf 2>/dev/null || true
+
 # 1) 启用镜像自带的最新 devtoolset（现代 gcc/g++），不写死版本号以兼容镜像更新
 DTS=$(ls -d /opt/rh/devtoolset-* | sort -V | tail -1)
 # devtoolset 的 enable 脚本引用了未定义的 MANPATH，与 set -u 冲突，source 时临时放宽
