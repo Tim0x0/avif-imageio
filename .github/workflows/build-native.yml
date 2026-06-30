@@ -7,6 +7,7 @@ on:
       - 'src/main/c/**'
       - 'CMakeLists.txt'
       - '.github/workflows/build-native.yml'
+      - '.github/scripts/**'
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
