@@ -135,6 +135,8 @@ if (Avif.isAvailable()) {
 | Linux    | x64          | ✅   |
 | macOS    | arm64 (M1/M2/M3) | ✅  |
 
+> ℹ️ **Linux 兼容性**：Linux 原生库基于 glibc 2.17（manylinux2014）编译，兼容 CentOS 7 / RHEL 7 及以后所有主流 Linux 发行版。早期版本（≤ 0.1.2）依赖更高版本 glibc，在 CentOS 7 等老系统上会加载失败（报错 `GLIBC_2.32 not found`），请升级到最新版本。
+
 ## 从源码构建
 
 ### 前置条件
