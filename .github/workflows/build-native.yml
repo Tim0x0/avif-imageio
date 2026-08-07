@@ -106,7 +106,11 @@ jobs:
         run: |
           git clone --depth 1 --branch v1.3.0 https://github.com/AOMediaCodec/libavif.git
           cd libavif/ext
-          .\dav1d.cmd
+          git clone -b 1.5.1 --depth 1 https://code.videolan.org/videolan/dav1d.git
+          # arm64 MSVC 上 dav1d 汇编需 gas-preprocessor.pl（runner 未提供），禁用汇编改纯 C
+          # （解码变慢但可构建；aom 编码仍用 armasm64 汇编保性能）
+          meson setup --default-library=static --buildtype release -Denable_tools=false -Denable_tests=false -Denable_asm=false dav1d/build dav1d
+          meson compile -C dav1d/build
           .\libyuv.cmd
           # Build aom with encoder only (decoder disabled for smaller size)
           git clone -b v3.12.1 --depth 1 https://aomedia.googlesource.com/aom
