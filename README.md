@@ -14,7 +14,7 @@ Java ImageIO 插件，用于读写 AVIF 图片格式。
 - 📊 支持 ICC 色彩配置文件
 - 📷 支持 EXIF 元数据
 - 🔧 可配置编码参数（质量、速度、无损）
-- 💻 跨平台支持（Windows x64、Linux x64、macOS arm64）
+- 💻 跨平台支持（Windows x64/arm64、Linux x64/arm64、macOS arm64）
 - ☕ 兼容 Java 8+
 
 ## 安装
@@ -132,7 +132,9 @@ if (Avif.isAvailable()) {
 | 平台     | 架构          | 状态 |
 |----------|--------------|------|
 | Windows  | x64          | ✅   |
+| Windows  | arm64        | ✅   |
 | Linux    | x64          | ✅   |
+| Linux    | arm64 (aarch64) | ✅ |
 | macOS    | arm64 (M1/M2/M3) | ✅  |
 
 > ℹ️ **Linux 兼容性**：Linux 原生库基于 glibc 2.17（manylinux2014）编译，兼容 CentOS 7 / RHEL 7 及以后所有主流 Linux 发行版。早期版本（≤ 0.1.2）依赖更高版本 glibc，在 CentOS 7 等老系统上会加载失败（报错 `GLIBC_2.32 not found`），请升级到最新版本。

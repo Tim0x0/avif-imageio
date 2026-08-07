@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * 原生库加载工具类
  * 
  * <p>负责从 JAR 包中提取并加载平台特定的原生库。
- * 支持 Windows x64、Linux x64 和 macOS arm64。</p>
+ * 支持 Windows x64/arm64、Linux x64/arm64(aarch64) 和 macOS arm64。</p>
  */
 class NativeLibraryUtils {
     
@@ -41,7 +41,7 @@ class NativeLibraryUtils {
             if (in == null) {
                 throw new UnsatisfiedLinkError(String.format(
                     "Native library not found for platform: %s/%s. " +
-                    "Resource path: %s. Supported platforms: win/64, linux/64, mac/arm64",
+                    "Resource path: %s. Supported platforms: win/64, win/arm64, linux/64, linux/arm64, mac/arm64",
                     platform.os, platform.arch, resourcePath));
             }
             
@@ -113,15 +113,15 @@ class NativeLibraryUtils {
         
         if (os.contains("win")) {
             platform = "win";
-            bits = "64";
+            bits = (arch.contains("aarch64") || arch.contains("arm64")) ? "arm64" : "64";
             libName = "avif-imageio.dll";
         } else if (os.contains("mac") || os.contains("darwin")) {
             platform = "mac";
-            bits = (arch.contains("aarch64") || arch.contains("arm")) ? "arm64" : "64";
+            bits = (arch.contains("aarch64") || arch.contains("arm64")) ? "arm64" : "64";
             libName = "libavif-imageio.dylib";
         } else if (os.contains("linux")) {
             platform = "linux";
-            bits = "64";
+            bits = (arch.contains("aarch64") || arch.contains("arm64")) ? "arm64" : "64";
             libName = "libavif-imageio.so";
         } else {
             throw new UnsatisfiedLinkError("Unsupported OS: " + os + 

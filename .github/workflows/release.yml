@@ -29,10 +29,32 @@ jobs:
           name: native-libraries-all
           path: dist/native/
           
+      - name: Flatten and rename native libraries
+        shell: bash
+        run: |
+          # 重命名为唯一文件名平铺到 dist/，避免 GitHub Release 同名 asset 冲突
+          # （win64 与 win-arm64 的 .dll、linux64 与 linux-arm64 的 .so 同名）
+          find dist/native -name 'avif-imageio.dll' -path '*/win/64/*'    -exec cp {} dist/avif-imageio-win64.dll \;
+          find dist/native -name 'avif-imageio.dll' -path '*/win/arm64/*' -exec cp {} dist/avif-imageio-winarm64.dll \;
+          find dist/native -name 'libavif-imageio.so' -path '*/linux/64/*'    -exec cp {} dist/libavif-imageio-linux64.so \;
+          find dist/native -name 'libavif-imageio.so' -path '*/linux/arm64/*' -exec cp {} dist/libavif-imageio-linuxarm64.so \;
+          find dist/native -name 'libavif-imageio.dylib' -path '*/mac/arm64/*' -exec cp {} dist/libavif-imageio-macarm64.dylib \;
+          # 验证全部存在（任一缺失则中止，避免 Release 缺少原生库）
+          for f in avif-imageio-win64.dll avif-imageio-winarm64.dll \
+                   libavif-imageio-linux64.so libavif-imageio-linuxarm64.so \
+                   libavif-imageio-macarm64.dylib; do
+            [ -s "dist/$f" ] || { echo "ERROR: 缺失 dist/$f（下载或构建失败）"; exit 1; }
+          done
+          ls -la dist/
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             dist/*.jar
-            dist/native/**/*
+            dist/avif-imageio-win64.dll
+            dist/avif-imageio-winarm64.dll
+            dist/libavif-imageio-linux64.so
+            dist/libavif-imageio-linuxarm64.so
+            dist/libavif-imageio-macarm64.dylib
           generate_release_notes: true

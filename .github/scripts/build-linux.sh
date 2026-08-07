@@ -4,6 +4,13 @@
 # 产出的 .so 只依赖 glibc <= 2.17 的符号，可在 CentOS 7 及以后所有主流 Linux 上加载。
 set -euo pipefail
 
+# 目标架构：根据容器 uname -m 决定输出子目录（x86_64→64, aarch64→arm64）
+case "$(uname -m)" in
+  x86_64)   ARCH_DIR=64 ;;
+  aarch64)  ARCH_DIR=arm64 ;;
+  *) echo "ERROR: 不支持的架构 $(uname -m)"; exit 1 ;;
+esac
+
 # 1) 启用镜像自带的最新 devtoolset（现代 gcc/g++），不写死版本号以兼容镜像更新
 DTS=$(ls -d /opt/rh/devtoolset-* | sort -V | tail -1)
 # devtoolset 的 enable 脚本引用了未定义的 MANPATH，与 set -u 冲突，source 时临时放宽
@@ -20,14 +27,15 @@ PYROOT=$(ls -d /opt/python/cp3* 2>/dev/null | sort -V | tail -1)
 export PATH="${PYROOT}/bin:${PATH}"
 python3 -m pip install meson ninja
 
-# 3) nasm：镜像未预装足够新版本，从源码编译 2.15.05
-#    (dav1d/aom 汇编所需；2.15.05 是最普及版本，官方源 URL 最稳定)
-NASM_VERSION=2.15.05
-# -4 强制 IPv4：manylinux2014 的 curl 7.29 无 Happy Eyeballs，IPv6 不可达时不回退会 exit 7
-curl -4fsSL "https://www.nasm.us/pub/nasm/releasebuilds/${NASM_VERSION}/nasm-${NASM_VERSION}.tar.xz" -o /tmp/nasm.tar.xz
-[ -s /tmp/nasm.tar.xz ] || { echo "ERROR: nasm 下载失败，请检查 URL/网络"; exit 1; }
-tar -C /tmp -xf /tmp/nasm.tar.xz
-( cd "/tmp/nasm-${NASM_VERSION}" && ./configure --prefix=/usr/local && make -j"$(nproc)" install )
+# 3) nasm：仅 x86_64 需要（dav1d/aom 的 x86 汇编）；aarch64 用 gas，无需 nasm
+if [[ "$(uname -m)" == "x86_64" ]]; then
+  NASM_VERSION=2.15.05
+  # -4 强制 IPv4：manylinux2014 的 curl 7.29 无 Happy Eyeballs，IPv6 不可达时不回退会 exit 7
+  curl -4fsSL "https://www.nasm.us/pub/nasm/releasebuilds/${NASM_VERSION}/nasm-${NASM_VERSION}.tar.xz" -o /tmp/nasm.tar.xz
+  [ -s /tmp/nasm.tar.xz ] || { echo "ERROR: nasm 下载失败，请检查 URL/网络"; exit 1; }
+  tar -C /tmp -xf /tmp/nasm.tar.xz
+  ( cd "/tmp/nasm-${NASM_VERSION}" && ./configure --prefix=/usr/local && make -j"$(nproc)" install )
+fi
 
 # 4) JDK（提供 JNI 头文件给 find_package(JNI)）
 #    manylinux2014 容器内 yum 安装 openjdk 8（参考 sherpa-onnx 的 linux-jni.yaml）；
@@ -42,7 +50,7 @@ g++ --version | head -1
 cmake --version | head -1
 ninja --version
 meson --version
-nasm -v
+nasm -v 2>/dev/null || echo "nasm: skipped (not needed on $(uname -m))"
 java -version 2>&1 | head -1
 echo "JAVA_HOME=${JAVA_HOME}"
 
@@ -94,6 +102,6 @@ objdump -T build/libavif-imageio.so | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail
 strip --strip-unneeded build/libavif-imageio.so
 
 # 8) 输出产物到挂载目录（host 可见，供 upload-artifact 上传）
-mkdir -p "$SRC/artifacts/linux/64"
-cp build/libavif-imageio.so "$SRC/artifacts/linux/64/"
-echo "BUILD OK: $(ls -la "$SRC/artifacts/linux/64/libavif-imageio.so")"
+mkdir -p "$SRC/artifacts/linux/${ARCH_DIR}"
+cp build/libavif-imageio.so "$SRC/artifacts/linux/${ARCH_DIR}/"
+echo "BUILD OK: $(ls -la "$SRC/artifacts/linux/${ARCH_DIR}/libavif-imageio.so")"

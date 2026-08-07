@@ -14,9 +14,11 @@ before_install:
       TAG="v${VERSION}"
     fi
     echo "Using tag: ${TAG}"
-    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/avif-imageio.dll" -o src/main/resources/native/win/64/avif-imageio.dll
-    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/libavif-imageio.so" -o src/main/resources/native/linux/64/libavif-imageio.so
-    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/libavif-imageio.dylib" -o src/main/resources/native/mac/arm64/libavif-imageio.dylib
+    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/avif-imageio-win64.dll" -o src/main/resources/native/win/64/avif-imageio.dll
+    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/avif-imageio-winarm64.dll" -o src/main/resources/native/win/arm64/avif-imageio.dll
+    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/libavif-imageio-linux64.so" -o src/main/resources/native/linux/64/libavif-imageio.so
+    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/libavif-imageio-linuxarm64.so" -o src/main/resources/native/linux/arm64/libavif-imageio.so
+    curl -fsSL "https://github.com/Tim0x0/avif-imageio/releases/download/${TAG}/libavif-imageio-macarm64.dylib" -o src/main/resources/native/mac/arm64/libavif-imageio.dylib
     ls -laR src/main/resources/native/
 
 # 自定义安装命令

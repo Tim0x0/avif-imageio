@@ -84,6 +84,75 @@ jobs:
           name: native-win-64
           path: artifacts/win/64/avif-imageio.dll
 
+  build-windows-arm64:
+    # Windows on ARM 原生构建。arm64 不需要 NASM（aom/dav1d 的 arm64 走 MSVC armasm64，非 x86 汇编）。
+    # 若 aom arm64 汇编报错，可给 aom cmake 加 -DAOM_TARGET_CPU=generic 退化为纯 C（牺牲速度换可用）。
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Install meson
+        run: pip install meson
+
+      - name: Build libavif with local dav1d, aom and libyuv
+        run: |
+          git clone --depth 1 --branch v1.3.0 https://github.com/AOMediaCodec/libavif.git
+          cd libavif/ext
+          .\dav1d.cmd
+          .\libyuv.cmd
+          # Build aom with encoder only (decoder disabled for smaller size)
+          git clone -b v3.12.1 --depth 1 https://aomedia.googlesource.com/aom
+          cmake -G Ninja -S aom -B aom/build.libavif `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DCONFIG_PIC=1 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DENABLE_DOCS=0 `
+            -DENABLE_EXAMPLES=0 `
+            -DENABLE_TESTDATA=0 `
+            -DENABLE_TESTS=0 `
+            -DENABLE_TOOLS=0 `
+            -DCONFIG_AV1_DECODER=0
+          cmake --build aom/build.libavif --config Release --parallel
+          cd ..
+          cmake -G Ninja -B build -S . `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DAVIF_CODEC_DAV1D=LOCAL `
+            -DAVIF_CODEC_AOM=LOCAL `
+            -DAVIF_CODEC_AOM_DECODE=OFF `
+            -DAVIF_LIBYUV=LOCAL
+          cmake --build build --config Release
+          cmake --install build --prefix ${{ github.workspace }}/libavif-install
+
+      - name: Configure CMake
+        run: |
+          cmake -G Ninja -B build -S . -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/libavif-install" `
+            -DBUILD_STATIC=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Copy artifact
+        run: |
+          mkdir -p artifacts/win/arm64
+          cp build/Release/avif-imageio.dll artifacts/win/arm64/ 2>/dev/null || cp build/avif-imageio.dll artifacts/win/arm64/
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-win-arm64
+          path: artifacts/win/arm64/avif-imageio.dll
+
   build-linux:
     # 在 ubuntu host 上用 docker 跑 manylinux2014 (CentOS 7 / glibc 2.17) 容器编译，
     # 保证产出的 .so 能在 CentOS 7 及以后所有主流 Linux 上加载。
@@ -106,6 +175,27 @@ jobs:
         with:
           name: native-linux-64
           path: artifacts/linux/64/libavif-imageio.so
+
+  build-linux-arm64:
+    # 原生 ARM64 runner 上跑 manylinux2014_aarch64 容器，产出 aarch64 .so。
+    # 不能在 x86 host 上跑（manylinux2014 不支持交叉），须用 ARM runner。
+    # 复用 build-linux.sh，脚本按 uname -m 自动选输出目录与是否编译 nasm。
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build in manylinux2014 aarch64 container
+        run: |
+          docker run --rm \
+            -v "$PWD:/work" \
+            quay.io/pypa/manylinux2014_aarch64 \
+            bash /work/.github/scripts/build-linux.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-arm64
+          path: artifacts/linux/arm64/libavif-imageio.so
 
   build-macos-arm64:
     runs-on: macos-14
@@ -167,7 +257,7 @@ jobs:
 
 
   package-and-test:
-    needs: [build-windows, build-linux, build-macos-arm64]
+    needs: [build-windows, build-windows-arm64, build-linux, build-linux-arm64, build-macos-arm64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -180,11 +270,15 @@ jobs:
       - name: Organize native libraries
         run: |
           mkdir -p src/main/resources/native/win/64
+          mkdir -p src/main/resources/native/win/arm64
           mkdir -p src/main/resources/native/linux/64
+          mkdir -p src/main/resources/native/linux/arm64
           mkdir -p src/main/resources/native/mac/arm64
 
           cp native-libs/native-win-64/avif-imageio.dll src/main/resources/native/win/64/
+          cp native-libs/native-win-arm64/avif-imageio.dll src/main/resources/native/win/arm64/
           cp native-libs/native-linux-64/libavif-imageio.so src/main/resources/native/linux/64/
+          cp native-libs/native-linux-arm64/libavif-imageio.so src/main/resources/native/linux/arm64/
           cp native-libs/native-mac-arm64/libavif-imageio.dylib src/main/resources/native/mac/arm64/
 
       - name: Upload combined artifact
