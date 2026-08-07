@@ -102,15 +102,23 @@ jobs:
       - name: Install meson
         run: pip install meson
 
+      - name: Checkout gas-preprocessor
+        # dav1d 的 arm64 汇编需 gas-preprocessor.pl 把 GNU as 语法转成 armasm64 格式。
+        # windows-11-arm runner 预装 Strawberry Perl；gas-preprocessor.pl 的 shebang
+        # #!/usr/bin/env perl 让 meson 自动用 perl 执行它（参考 haasn/checkasm 的 msvc-arm64 job）
+        uses: actions/checkout@v4
+        with:
+          repository: FFmpeg/gas-preprocessor
+          ref: f85b94087d168564b777877dfb3a0eeea3d57678
+          path: gas-preprocessor
+      - name: Add gas-preprocessor to PATH
+        run: echo "$PWD\gas-preprocessor" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Build libavif with local dav1d, aom and libyuv
         run: |
           git clone --depth 1 --branch v1.3.0 https://github.com/AOMediaCodec/libavif.git
           cd libavif/ext
-          git clone -b 1.5.1 --depth 1 https://code.videolan.org/videolan/dav1d.git
-          # arm64 MSVC 上 dav1d 汇编需 gas-preprocessor.pl（runner 未提供），禁用汇编改纯 C
-          # （解码变慢但可构建；aom 编码仍用 armasm64 汇编保性能）
-          meson setup --default-library=static --buildtype release -Denable_tools=false -Denable_tests=false -Denable_asm=false dav1d/build dav1d
-          meson compile -C dav1d/build
+          .\dav1d.cmd
           .\libyuv.cmd
           # Build aom with encoder only (decoder disabled for smaller size)
           git clone -b v3.12.1 --depth 1 https://aomedia.googlesource.com/aom
